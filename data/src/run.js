@@ -128,6 +128,8 @@ async function processRun(body, ip = '') {
         }
         const localTmp = path_1.default.join(tempDir, 'tmp');
         const envVars = [
+            `export LANG=C.UTF-8`,
+            `export PYTHONUTF8=1`,
             `export TMPDIR=${localTmp}`,
             `export TEMP=${localTmp}`,
             `export TMP=${localTmp}`,
