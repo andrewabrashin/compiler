@@ -18,7 +18,7 @@ async function processTestRun(body) {
         unitTest: unit_test,
     });
     const port = process.env.PORT ?? '3999';
-    const sandboxCmd = `ulimit -f 10240 && ulimit -u 64 && ulimit -v 2097152 && PORT=${port} node ${RUNNER_PATH}`;
+    const sandboxCmd = `ulimit -f 10240 && ulimit -u 256 && ulimit -v 2097152 && PORT=${port} node ${RUNNER_PATH}`;
     let stdOut = '';
     let stdErr = '';
     let timedOut = false;
