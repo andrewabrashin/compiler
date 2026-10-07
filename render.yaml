@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: compiler-1t-ru
+    runtime: docker
+    # Slim build (~2 GB, ~5 min). Replace with Dockerfile for full ML libs.
+    dockerfilePath: ./deploy/render/Dockerfile.slim
+    # dockerfilePath: ./deploy/render/Dockerfile
+    plan: standard          # standard = 2 vCPU, 4 GB RAM; pro = 4 vCPU, 8 GB RAM
+    region: frankfurt       # ближайший к RU
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TIMEOUT
+        value: "60"
+      - key: API_KEY
+        sync: false         # заполнить в dashboard render.com
+      - key: ADMIN_KEY
+        sync: false
+      - key: RESTART_TOKEN
+        sync: false
+      - key: LLM_API_URL
+        sync: false
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_MODEL
+        sync: false
