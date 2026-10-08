@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+data/src/node_modules/
+
+# Lock files (only data/src/package-lock.json is versioned)
+yarn.lock
+data/src/yarn.lock
+package-lock.json
+
+# IDE
+.idea/
+.vscode/
+
+# Env
+.env
+.env.*
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
