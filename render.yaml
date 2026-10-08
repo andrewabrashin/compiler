@@ -11,6 +11,14 @@ services:
         value: production
       - key: TIMEOUT
         value: "60"
+      - key: INTERACTIVE_TIMEOUT
+        value: "600"
+      - key: MAX_SESSIONS
+        value: "20"
+      - key: MAX_SESSIONS_PER_IP
+        value: "3"
+      - key: WS_RATE_MAX
+        value: "10"
       - key: API_KEY
         sync: false
       - key: ADMIN_KEY
