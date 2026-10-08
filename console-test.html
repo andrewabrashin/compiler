@@ -23,7 +23,14 @@
     }
     #btn-run   { background: #0e7a0e; color: #fff; }
     #btn-kill  { background: #a12b2b; color: #fff; display: none; }
+    #btn-eof   { background: #5a3e7a; color: #fff; display: none; }
     #btn-clear { background: #3c3c3c; color: #ccc; }
+
+    .interactive-wrap { display: flex; align-items: center; gap: 5px; }
+    .interactive-wrap input[type=checkbox] { accent-color: #569cd6; width: 14px; height: 14px; cursor: pointer; }
+    .interactive-wrap label { font-size: 12px; color: #9d9d9d; cursor: pointer; user-select: none; }
+    .interactive-wrap label.disabled { opacity: 0.4; }
+
     #status { font-size: 12px; color: #9d9d9d; margin-left: auto; }
 
     .main { display: flex; flex: 1; overflow: hidden; }
@@ -32,7 +39,7 @@
       display: flex; flex-direction: column; width: 50%;
       border-right: 1px solid #3c3c3c;
     }
-    .editor-pane label { padding: 6px 10px; font-size: 11px; color: #9d9d9d; background: #252526; }
+    .editor-pane > label { padding: 6px 10px; font-size: 11px; color: #9d9d9d; background: #252526; }
     #code {
       flex: 1; resize: none; background: #1e1e1e; color: #d4d4d4;
       border: none; outline: none; padding: 10px; font-size: 13px; line-height: 1.5;
@@ -40,7 +47,7 @@
     }
 
     .output-pane { display: flex; flex-direction: column; flex: 1; }
-    .output-pane label { padding: 6px 10px; font-size: 11px; color: #9d9d9d; background: #252526; }
+    .output-pane > label { padding: 6px 10px; font-size: 11px; color: #9d9d9d; background: #252526; }
     #output {
       flex: 1; overflow-y: auto; padding: 10px; font-size: 13px; line-height: 1.6;
       white-space: pre-wrap; word-break: break-all;
@@ -54,12 +61,12 @@
       flex: 1; background: #1e1e1e; border: 1px solid #555; color: #d4d4d4;
       padding: 5px 8px; font-family: monospace; font-size: 13px; border-radius: 3px;
     }
-    #btn-send { background: #264f78; color: #fff; padding: 5px 12px; border: none; border-radius: 3px; cursor: pointer; font-family: monospace; }
+    #btn-send { background: #264f78; color: #fff; padding: 5px 12px; border: none; border-radius: 3px; cursor: pointer; font-family: monospace; font-size: 13px; font-weight: bold; }
 
-    .out-stdout { color: #d4d4d4; }
-    .out-stderr { color: #f48771; }
-    .out-info   { color: #569cd6; }
-    .out-exit-ok { color: #4ec9b0; }
+    .out-stdout  { color: #d4d4d4; }
+    .out-stderr  { color: #f48771; }
+    .out-info    { color: #569cd6; }
+    .out-exit-ok  { color: #4ec9b0; }
     .out-exit-err { color: #f48771; }
   </style>
 </head>
@@ -74,10 +81,16 @@
     <option value="cpp">C++</option>
   </select>
 
+  <div class="interactive-wrap">
+    <input type="checkbox" id="interactive" checked>
+    <label for="interactive" id="interactive-label">интерактивный</label>
+  </div>
+
   <label>API Key:</label>
   <input type="password" id="api-key" placeholder="если требуется">
 
   <button id="btn-run">▶ Run</button>
+  <button id="btn-eof">Ctrl+D</button>
   <button id="btn-kill">■ Kill</button>
   <button id="btn-clear">Clear</button>
 
@@ -87,12 +100,7 @@
 <div class="main">
   <div class="editor-pane">
     <label>Код</label>
-    <textarea id="code" spellcheck="false">name = input("Введите имя: ")
-print(f"Привет, {name}!")
-
-n = int(input("Введите число: "))
-print(f"Квадрат: {n * n}")
-</textarea>
+    <textarea id="code" spellcheck="false"></textarea>
   </div>
 
   <div class="output-pane">
@@ -108,29 +116,54 @@ print(f"Квадрат: {n * n}")
 <script>
   const WS_URL = 'wss://compiler-1-qgn4.onrender.com/console';
 
-  const langSelect   = document.getElementById('lang');
-  const apiKeyInput  = document.getElementById('api-key');
-  const codeArea     = document.getElementById('code');
-  const output       = document.getElementById('output');
-  const stdinInput   = document.getElementById('stdin-input');
-  const btnRun       = document.getElementById('btn-run');
-  const btnKill      = document.getElementById('btn-kill');
-  const btnClear     = document.getElementById('btn-clear');
-  const btnSend      = document.getElementById('btn-send');
-  const statusEl     = document.getElementById('status');
+  const langSelect      = document.getElementById('lang');
+  const interactiveBox  = document.getElementById('interactive');
+  const interactiveLabel= document.getElementById('interactive-label');
+  const apiKeyInput     = document.getElementById('api-key');
+  const codeArea        = document.getElementById('code');
+  const output          = document.getElementById('output');
+  const stdinInput      = document.getElementById('stdin-input');
+  const btnRun          = document.getElementById('btn-run');
+  const btnKill         = document.getElementById('btn-kill');
+  const btnEof          = document.getElementById('btn-eof');
+  const btnClear        = document.getElementById('btn-clear');
+  const btnSend         = document.getElementById('btn-send');
+  const statusEl        = document.getElementById('status');
 
   const EXAMPLES = {
-    python: `name = input("Введите имя: ")\nprint(f"Привет, {name}!")\n\nn = int(input("Введите число: "))\nprint(f"Квадрат: {n * n}")`,
+    python: `def greet(name):\n    print(f"Привет, {name}!")\n\ndef square(n):\n    return n * n\n\nprint("Функции загружены: greet(name), square(n)")`,
     js:     `const readline = require('readline');\nconst rl = readline.createInterface({ input: process.stdin });\nrl.question('Введите имя: ', name => {\n  console.log(\`Привет, \${name}!\`);\n  rl.close();\n});`,
     ts:     `import * as readline from 'readline';\nconst rl = readline.createInterface({ input: process.stdin });\nrl.question('Введите имя: ', (name: string) => {\n  console.log(\`Привет, \${name}!\`);\n  rl.close();\n});`,
     cpp:    `#include <iostream>\n#include <string>\nint main() {\n    std::string name;\n    std::cout << "Введите имя: ";\n    std::getline(std::cin, name);\n    std::cout << "Привет, " << name << "!" << std::endl;\n    return 0;\n}`,
   };
 
+  // Python и JS поддерживают интерактивный режим
+  const INTERACTIVE_COMMAND = {
+    python: (file) => `python -i "${file}"`,
+    js:     (file) => `node -i --require ./${file}`,
+    ts:     null,
+    cpp:    null,
+  };
+
   const FILE_NAMES = { python: 'main.py', js: 'main.js', ts: 'main.ts', cpp: 'main.cpp' };
+
+  function updateInteractiveToggle() {
+    const lang = langSelect.value;
+    const supported = !!INTERACTIVE_COMMAND[lang];
+    interactiveBox.disabled = !supported;
+    interactiveLabel.classList.toggle('disabled', !supported);
+    if (!supported) interactiveBox.checked = false;
+    else interactiveBox.checked = true;
+  }
 
   langSelect.addEventListener('change', () => {
     codeArea.value = EXAMPLES[langSelect.value];
+    updateInteractiveToggle();
   });
+
+  // init
+  codeArea.value = EXAMPLES[langSelect.value];
+  updateInteractiveToggle();
 
   let ws = null;
   let startTime = null;
@@ -144,8 +177,10 @@ print(f"Квадрат: {n * n}")
   }
 
   function setRunning(running) {
+    const interactive = interactiveBox.checked;
     btnRun.style.display  = running ? 'none' : '';
     btnKill.style.display = running ? '' : 'none';
+    btnEof.style.display  = running && interactive ? '' : 'none';
     stdinInput.disabled = !running;
     btnSend.disabled    = !running;
     if (!running) stdinInput.value = '';
@@ -157,6 +192,7 @@ print(f"Квадрат: {n * n}")
     ws.send(JSON.stringify({ type: 'stdin', data: text + '\n' }));
     log(text + '\n', 'out-info');
     stdinInput.value = '';
+    stdinInput.focus();
   }
 
   stdinInput.addEventListener('keydown', e => {
@@ -181,11 +217,20 @@ print(f"Квадрат: {n * n}")
     }
   });
 
+  btnEof.addEventListener('click', () => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'eof' }));
+      log('[Ctrl+D]\n', 'out-info');
+    }
+  });
+
   btnRun.addEventListener('click', () => {
     if (ws) { ws.close(); ws = null; }
 
-    const lang = langSelect.value;
-    const apiKey = apiKeyInput.value.trim();
+    const lang        = langSelect.value;
+    const interactive = interactiveBox.checked;
+    const apiKey      = apiKeyInput.value.trim();
+    const file        = FILE_NAMES[lang];
 
     log(`▶ Подключение...\n`, 'out-info');
     statusEl.textContent = 'подключение...';
@@ -205,13 +250,19 @@ print(f"Квадрат: {n * n}")
       const msg = {
         type: 'start',
         compiler: lang,
-        target_file: FILE_NAMES[lang],
-        files: [{ name: FILE_NAMES[lang], content: codeArea.value }],
+        files: [{ name: file, content: codeArea.value }],
       };
-      if (apiKey) msg.api_key = apiKey;
 
+      if (interactive && INTERACTIVE_COMMAND[lang]) {
+        msg.command = INTERACTIVE_COMMAND[lang](file);
+        log(`▶ Запуск (${lang}, интерактивный)\n`, 'out-info');
+      } else {
+        msg.target_file = file;
+        log(`▶ Запуск (${lang})\n`, 'out-info');
+      }
+
+      if (apiKey) msg.api_key = apiKey;
       ws.send(JSON.stringify(msg));
-      log(`▶ Запуск (${lang})\n`, 'out-info');
     };
 
     ws.onmessage = (event) => {

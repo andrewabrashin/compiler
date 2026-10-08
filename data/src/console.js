@@ -176,6 +176,8 @@ async function handleConsoleSession(ws, body) {
                     const msg = JSON.parse(raw.toString());
                     if (msg.type === 'stdin') {
                         child.stdin.write(msg.data);
+                    } else if (msg.type === 'eof') {
+                        child.stdin.end();
                     } else if (msg.type === 'kill') {
                         killProcess(child);
                     }
