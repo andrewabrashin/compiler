@@ -120,10 +120,18 @@ server.on('upgrade', (req, socket, head) => {
     });
 });
 
+const WS_PING_INTERVAL_MS = 30_000;
+
 wss.on('connection', (ws, req) => {
     const ip = realIp(req);
     trackSession(ip, +1);
     ws.once('close', () => trackSession(ip, -1));
+
+    // Keep-alive: Render.com drops idle connections after ~55s
+    const pingTimer = setInterval(() => {
+        if (ws.readyState === ws_1.WebSocket.OPEN) ws.ping();
+    }, WS_PING_INTERVAL_MS);
+    ws.once('close', () => clearInterval(pingTimer));
 
     ws.once('message', async (raw) => {
         let body;
@@ -144,8 +152,15 @@ wss.on('connection', (ws, req) => {
                 return;
             }
         }
-        await (0, console_1.handleConsoleSession)(ws, body);
-        if (ws.readyState === 1) ws.close();
+        try {
+            await (0, console_1.handleConsoleSession)(ws, body);
+        } catch (err) {
+            console.error('[console] unhandled error:', err);
+            if (ws.readyState === ws_1.WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'error', message: 'Internal server error' }));
+            }
+        }
+        if (ws.readyState === ws_1.WebSocket.OPEN) ws.close();
     });
 });
 
