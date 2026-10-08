@@ -205,6 +205,7 @@ print(f"Квадрат: {n * n}")
       const msg = {
         type: 'start',
         compiler: lang,
+        target_file: FILE_NAMES[lang],
         files: [{ name: FILE_NAMES[lang], content: codeArea.value }],
       };
       if (apiKey) msg.api_key = apiKey;
