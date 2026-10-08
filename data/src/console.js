@@ -10,7 +10,7 @@ const { killProcess } = require("./helpers/killProcess");
 const { sanitizeStderr } = require("./helpers/errorLocalizer");
 
 const TIMEOUT_SEC = parseInt(process.env.TIMEOUT ?? '60', 10);
-const INTERACTIVE_TIMEOUT_SEC = parseInt(process.env.INTERACTIVE_TIMEOUT ?? '300', 10);
+const INTERACTIVE_TIMEOUT_SEC = parseInt(process.env.INTERACTIVE_TIMEOUT ?? '600', 10);
 const TESTS_PATH = '/home/student/tests/';
 const SAFE_LIB_RE = /^[a-zA-Z0-9@/._\-\[\]<>=!~^*,+]+$/;
 
