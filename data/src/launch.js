@@ -55,6 +55,27 @@ app.post('/restart', (req, res) => {
     process.exit(1);
 });
 
+const MAX_SESSIONS        = parseInt(process.env.MAX_SESSIONS         ?? '20', 10);
+const MAX_SESSIONS_PER_IP = parseInt(process.env.MAX_SESSIONS_PER_IP  ?? '3',  10);
+const WS_RATE_MAX         = parseInt(process.env.WS_RATE_MAX          ?? '10', 10); // new conns/IP/min
+
+let activeSessions = 0;
+const sessionsByIp = new Map(); // ip → active count
+const wsRateMap    = new Map(); // ip → { count, resetAt }
+
+function wsRateOk(ip) {
+    const now = Date.now();
+    let e = wsRateMap.get(ip);
+    if (!e || now > e.resetAt) { e = { count: 0, resetAt: now + 60_000 }; wsRateMap.set(ip, e); }
+    return ++e.count <= WS_RATE_MAX;
+}
+
+function trackSession(ip, delta) {
+    activeSessions += delta;
+    const n = (sessionsByIp.get(ip) ?? 0) + delta;
+    if (n <= 0) sessionsByIp.delete(ip); else sessionsByIp.set(ip, n);
+}
+
 const server = http_1.default.createServer(app);
 const wss = new ws_1.WebSocketServer({ noServer: true });
 
@@ -66,6 +87,7 @@ server.on('upgrade', (req, socket, head) => {
     }
     const ip = req.socket.remoteAddress ?? '';
     const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+
     if (!isLocal && API_KEY) {
         const key = req.headers['x-api-key'] ?? '';
         if (key !== API_KEY) {
@@ -74,12 +96,36 @@ server.on('upgrade', (req, socket, head) => {
             return;
         }
     }
+
+    if (!isLocal) {
+        if (!wsRateOk(ip)) {
+            socket.write('HTTP/1.1 429 Too Many Requests\r\n\r\n');
+            socket.destroy();
+            return;
+        }
+        if ((sessionsByIp.get(ip) ?? 0) >= MAX_SESSIONS_PER_IP) {
+            socket.write('HTTP/1.1 429 Too Many Requests\r\n\r\n');
+            socket.destroy();
+            return;
+        }
+    }
+
+    if (activeSessions >= MAX_SESSIONS) {
+        socket.write('HTTP/1.1 503 Service Unavailable\r\n\r\n');
+        socket.destroy();
+        return;
+    }
+
     wss.handleUpgrade(req, socket, head, (ws) => {
         wss.emit('connection', ws, req);
     });
 });
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
+    const ip = req.socket.remoteAddress ?? '';
+    trackSession(ip, +1);
+    ws.once('close', () => trackSession(ip, -1));
+
     ws.once('message', async (raw) => {
         let body;
         try {
