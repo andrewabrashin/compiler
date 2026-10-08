@@ -151,13 +151,18 @@ async function handleConsoleSession(ws, body) {
             let done = false;
             const finish = () => { if (!done) { done = true; resolve(); } };
 
-            const timeoutId = setTimeout(() => {
-                killProcess(child);
-                const limitSec = interactive ? INTERACTIVE_TIMEOUT_SEC : TIMEOUT_SEC;
-                send(ws, { type: 'stderr', data: `[Timeout] ${limitSec} sec` });
-                send(ws, { type: 'exit', code: 1, duration: Date.now() - startTime });
-                finish();
-            }, timeoutMs);
+            const limitSec = interactive ? INTERACTIVE_TIMEOUT_SEC : TIMEOUT_SEC;
+            let timeoutId;
+            const resetTimeout = () => {
+                clearTimeout(timeoutId);
+                timeoutId = setTimeout(() => {
+                    killProcess(child);
+                    send(ws, { type: 'stderr', data: `[Timeout] ${limitSec} sec` });
+                    send(ws, { type: 'exit', code: 1, duration: Date.now() - startTime });
+                    finish();
+                }, timeoutMs);
+            };
+            resetTimeout();
 
             child.stdout.on('data', d => send(ws, { type: 'stdout', data: d.toString() }));
             child.stderr.on('data', d => send(ws, { type: 'stderr', data: sanitizeStderr(d.toString()) }));
@@ -179,6 +184,7 @@ async function handleConsoleSession(ws, body) {
                 try {
                     const msg = JSON.parse(raw.toString());
                     if (msg.type === 'stdin') {
+                        resetTimeout();
                         child.stdin.write(msg.data);
                     } else if (msg.type === 'eof') {
                         child.stdin.end();
