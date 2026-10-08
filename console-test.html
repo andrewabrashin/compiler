@@ -21,10 +21,11 @@
       padding: 5px 14px; border: none; border-radius: 3px; cursor: pointer;
       font-family: monospace; font-size: 13px; font-weight: bold;
     }
-    #btn-run   { background: #0e7a0e; color: #fff; }
-    #btn-kill  { background: #a12b2b; color: #fff; display: none; }
-    #btn-eof   { background: #5a3e7a; color: #fff; display: none; }
-    #btn-clear { background: #3c3c3c; color: #ccc; }
+    #btn-run     { background: #0e7a0e; color: #fff; }
+    #btn-execute { background: #1a5c8a; color: #fff; }
+    #btn-kill    { background: #a12b2b; color: #fff; display: none; }
+    #btn-eof     { background: #5a3e7a; color: #fff; display: none; }
+    #btn-clear   { background: #3c3c3c; color: #ccc; }
 
     .interactive-wrap { display: flex; align-items: center; gap: 5px; }
     .interactive-wrap input[type=checkbox] { accent-color: #569cd6; width: 14px; height: 14px; cursor: pointer; }
@@ -91,6 +92,7 @@
   <label>API Key:</label>
   <input type="password" id="api-key" placeholder="если требуется">
 
+  <button id="btn-execute">⚡ Execute</button>
   <button id="btn-run">▶ Run</button>
   <button id="btn-eof">Ctrl+D</button>
   <button id="btn-kill">■ Kill</button>
@@ -129,6 +131,7 @@
   const btnKill         = document.getElementById('btn-kill');
   const btnEof          = document.getElementById('btn-eof');
   const btnClear        = document.getElementById('btn-clear');
+  const btnExecute      = document.getElementById('btn-execute');
   const btnSend         = document.getElementById('btn-send');
   const statusEl        = document.getElementById('status');
 
@@ -248,6 +251,47 @@
       ws.send(JSON.stringify({ type: 'eof' }));
       log('[Ctrl+D]\n', 'out-info');
     }
+  });
+
+  btnExecute.addEventListener('click', async () => {
+    const lang    = langSelect.value;
+    const apiKey  = apiKeyInput.value.trim();
+    const file    = FILE_NAMES[lang];
+
+    log(`⚡ Execute (${lang})...\n`, 'out-info');
+    btnExecute.disabled = true;
+    statusEl.textContent = 'выполняется';
+
+    const headers = { 'Content-Type': 'application/json' };
+    if (apiKey) headers['x-api-key'] = apiKey;
+
+    try {
+      const res = await fetch('/execute', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          compiler: lang,
+          target_file: file,
+          files: [{ name: file, content: codeArea.value }],
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        log(`Ошибка ${res.status}: ${data.error ?? JSON.stringify(data)}\n`, 'out-stderr');
+      } else {
+        const run = data.run;
+        if (run.stdout) log(run.stdout, 'out-stdout');
+        if (run.stderr) log(run.stderr, 'out-stderr');
+        const ok = run.exit_code === 0;
+        log(`\n${ok ? '✓' : '✗'} Завершено: код ${run.exit_code}, время ${run.duration} мс\n`,
+            ok ? 'out-exit-ok' : 'out-exit-err');
+      }
+    } catch (e) {
+      log(`Ошибка запроса: ${e.message}\n`, 'out-stderr');
+    }
+
+    btnExecute.disabled = false;
+    statusEl.textContent = 'не подключено';
   });
 
   btnRun.addEventListener('click', () => {
