@@ -109,7 +109,7 @@
     <label>Вывод</label>
     <div id="output"></div>
     <div class="stdin-bar">
-      <textarea id="stdin-input" rows="1" placeholder="stdin → Enter отправить, Alt+Enter перенос строки" disabled></textarea>
+      <textarea id="stdin-input" rows="1" placeholder="stdin → Enter отправить, Shift+Enter перенос строки" disabled></textarea>
       <button id="btn-send" disabled>Send</button>
     </div>
   </div>
@@ -208,10 +208,10 @@
   stdinInput.addEventListener('input', growStdin);
 
   stdinInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.altKey) {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendStdin();
-    } else if (e.key === 'Enter' && e.altKey) {
+    } else if (e.key === 'Enter' && e.shiftKey) {
       e.preventDefault();
       const s = stdinInput.selectionStart;
       const before = stdinInput.value.slice(0, s);
