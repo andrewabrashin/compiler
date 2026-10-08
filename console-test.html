@@ -214,8 +214,13 @@
     } else if (e.key === 'Enter' && e.altKey) {
       e.preventDefault();
       const s = stdinInput.selectionStart;
-      stdinInput.value = stdinInput.value.slice(0, s) + '\n' + stdinInput.value.slice(stdinInput.selectionEnd);
-      stdinInput.selectionStart = stdinInput.selectionEnd = s + 1;
+      const before = stdinInput.value.slice(0, s);
+      const curLine = before.slice(before.lastIndexOf('\n') + 1);
+      const indent = curLine.match(/^(\s*)/)[1];
+      const extra = curLine.trimEnd().endsWith(':') ? '    ' : '';
+      const ins = '\n' + indent + extra;
+      stdinInput.value = before + ins + stdinInput.value.slice(stdinInput.selectionEnd);
+      stdinInput.selectionStart = stdinInput.selectionEnd = s + ins.length;
       growStdin();
     }
   });
