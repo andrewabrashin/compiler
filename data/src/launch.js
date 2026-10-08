@@ -17,24 +17,18 @@ const RESTART_TOKEN = process.env.RESTART_TOKEN ?? '';
 const API_KEY = process.env.API_KEY ?? '';
 const ADMIN_KEY = process.env.ADMIN_KEY ?? '';
 
-app.set('trust proxy', 1);
 app.use(express_1.default.json({ limit: '10mb' }));
 
-function realIp(req) {
-    const fwd = req.headers['x-forwarded-for'];
-    return (fwd ? String(fwd).split(',')[0].trim() : req.socket.remoteAddress) ?? '';
-}
-
-function isLocalIp(ip) {
-    return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
-}
-
 function requireApiKey(req, res, next) {
-    if (isLocalIp(realIp(req))) { next(); return; }
-    const key = req.headers['x-api-key'] ?? '';
-    if (key !== API_KEY) {
-        res.status(403).json({ error: 'Forbidden' });
-        return;
+    const ip = req.ip ?? '';
+    const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+    if (isLocal) { next(); return; }
+    if (API_KEY) {
+        const key = req.headers['x-api-key'] ?? '';
+        if (key !== API_KEY) {
+            res.status(403).json({ error: 'Forbidden' });
+            return;
+        }
     }
     next();
 }
@@ -65,11 +59,11 @@ app.post('/restart', (req, res) => {
 
 const MAX_SESSIONS        = parseInt(process.env.MAX_SESSIONS         ?? '20', 10);
 const MAX_SESSIONS_PER_IP = parseInt(process.env.MAX_SESSIONS_PER_IP  ?? '3',  10);
-const WS_RATE_MAX         = parseInt(process.env.WS_RATE_MAX          ?? '10', 10); // new conns/IP/min
+const WS_RATE_MAX         = parseInt(process.env.WS_RATE_MAX          ?? '10', 10);
 
 let activeSessions = 0;
-const sessionsByIp = new Map(); // ip → active count
-const wsRateMap    = new Map(); // ip → { count, resetAt }
+const sessionsByIp = new Map();
+const wsRateMap    = new Map();
 
 function wsRateOk(ip) {
     const now = Date.now();
@@ -93,8 +87,17 @@ server.on('upgrade', (req, socket, head) => {
         socket.destroy();
         return;
     }
-    const ip = realIp(req);
-    const isLocal = isLocalIp(ip);
+    const ip = req.socket.remoteAddress ?? '';
+    const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+
+    if (!isLocal && API_KEY) {
+        const key = req.headers['x-api-key'] ?? '';
+        if (key !== API_KEY) {
+            socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+            socket.destroy();
+            return;
+        }
+    }
 
     if (!isLocal) {
         if (!wsRateOk(ip)) {
@@ -123,11 +126,10 @@ server.on('upgrade', (req, socket, head) => {
 const WS_PING_INTERVAL_MS = 30_000;
 
 wss.on('connection', (ws, req) => {
-    const ip = realIp(req);
+    const ip = req.socket.remoteAddress ?? '';
     trackSession(ip, +1);
     ws.once('close', () => trackSession(ip, -1));
 
-    // Keep-alive: Render.com drops idle connections after ~55s
     const pingTimer = setInterval(() => {
         if (ws.readyState === ws_1.WebSocket.OPEN) ws.ping();
     }, WS_PING_INTERVAL_MS);
@@ -144,13 +146,6 @@ wss.on('connection', (ws, req) => {
         if (body.type !== 'start') {
             ws.close(1008, 'Expected {type:"start",...}');
             return;
-        }
-        if (!isLocalIp(ip)) {
-            const key = body.api_key ?? '';
-            if (key !== API_KEY) {
-                ws.close(4003, 'Forbidden');
-                return;
-            }
         }
         try {
             await (0, console_1.handleConsoleSession)(ws, body);
