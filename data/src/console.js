@@ -10,6 +10,7 @@ const { killProcess } = require("./helpers/killProcess");
 const { sanitizeStderr } = require("./helpers/errorLocalizer");
 
 const TIMEOUT_SEC = parseInt(process.env.TIMEOUT ?? '60', 10);
+const INTERACTIVE_TIMEOUT_SEC = parseInt(process.env.INTERACTIVE_TIMEOUT ?? '300', 10);
 const TESTS_PATH = '/home/student/tests/';
 const SAFE_LIB_RE = /^[a-zA-Z0-9@/._\-\[\]<>=!~^*,+]+$/;
 
@@ -43,6 +44,8 @@ async function handleConsoleSession(ws, body) {
     let targetFile = (body.target_file ?? '').trim();
     const rawLibraries = (body.libraries ?? []).map(String);
     const project = Boolean(body.project);
+    const interactive = Boolean(body.interactive);
+    const timeoutMs = (interactive ? INTERACTIVE_TIMEOUT_SEC : TIMEOUT_SEC) * 1000;
 
     const badLib = rawLibraries.find(lib => !SAFE_LIB_RE.test(lib.trim()));
     if (badLib !== undefined) {
@@ -150,10 +153,11 @@ async function handleConsoleSession(ws, body) {
 
             const timeoutId = setTimeout(() => {
                 killProcess(child);
-                send(ws, { type: 'stderr', data: `[Timeout] ${TIMEOUT_SEC} sec` });
+                const limitSec = interactive ? INTERACTIVE_TIMEOUT_SEC : TIMEOUT_SEC;
+                send(ws, { type: 'stderr', data: `[Timeout] ${limitSec} sec` });
                 send(ws, { type: 'exit', code: 1, duration: Date.now() - startTime });
                 finish();
-            }, TIMEOUT_SEC * 1000);
+            }, timeoutMs);
 
             child.stdout.on('data', d => send(ws, { type: 'stdout', data: d.toString() }));
             child.stderr.on('data', d => send(ws, { type: 'stderr', data: sanitizeStderr(d.toString()) }));

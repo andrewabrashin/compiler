@@ -281,6 +281,7 @@
 
       if (interactive && INTERACTIVE_COMMAND[lang]) {
         msg.command = INTERACTIVE_COMMAND[lang](file);
+        msg.interactive = true;
         log(`▶ Запуск (${lang}, интерактивный)\n`, 'out-info');
       } else {
         msg.target_file = file;
