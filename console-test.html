@@ -54,12 +54,14 @@
     }
 
     .stdin-bar {
-      display: flex; gap: 6px; padding: 8px 10px;
+      display: flex; gap: 6px; padding: 8px 10px; align-items: flex-end;
       background: #252526; border-top: 1px solid #3c3c3c;
     }
     #stdin-input {
       flex: 1; background: #1e1e1e; border: 1px solid #555; color: #d4d4d4;
       padding: 5px 8px; font-family: monospace; font-size: 13px; border-radius: 3px;
+      resize: none; overflow: hidden; min-height: 28px; max-height: 200px;
+      line-height: 1.5; display: block;
     }
     #btn-send { background: #264f78; color: #fff; padding: 5px 12px; border: none; border-radius: 3px; cursor: pointer; font-family: monospace; font-size: 13px; font-weight: bold; }
 
@@ -107,7 +109,7 @@
     <label>Вывод</label>
     <div id="output"></div>
     <div class="stdin-bar">
-      <input type="text" id="stdin-input" placeholder="stdin → Enter для отправки" disabled>
+      <textarea id="stdin-input" rows="1" placeholder="stdin → Enter отправить, Alt+Enter перенос строки" disabled></textarea>
       <button id="btn-send" disabled>Send</button>
     </div>
   </div>
@@ -192,11 +194,28 @@
     ws.send(JSON.stringify({ type: 'stdin', data: text + '\n' }));
     log(text + '\n', 'out-info');
     stdinInput.value = '';
+    stdinInput.style.height = 'auto';
     stdinInput.focus();
   }
 
+  function growStdin() {
+    stdinInput.style.height = 'auto';
+    stdinInput.style.height = Math.min(stdinInput.scrollHeight, 200) + 'px';
+  }
+
+  stdinInput.addEventListener('input', growStdin);
+
   stdinInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter') sendStdin();
+    if (e.key === 'Enter' && !e.altKey) {
+      e.preventDefault();
+      sendStdin();
+    } else if (e.key === 'Enter' && e.altKey) {
+      e.preventDefault();
+      const s = stdinInput.selectionStart;
+      stdinInput.value = stdinInput.value.slice(0, s) + '\n' + stdinInput.value.slice(stdinInput.selectionEnd);
+      stdinInput.selectionStart = stdinInput.selectionEnd = s + 1;
+      growStdin();
+    }
   });
   btnSend.addEventListener('click', sendStdin);
 
