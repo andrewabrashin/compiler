@@ -16,12 +16,20 @@ const RESTART_TOKEN = process.env.RESTART_TOKEN ?? '';
 const API_KEY = process.env.API_KEY ?? '';
 const ADMIN_KEY = process.env.ADMIN_KEY ?? '';
 
+app.set('trust proxy', 1);
 app.use(express_1.default.json({ limit: '10mb' }));
 
+function realIp(req) {
+    const fwd = req.headers['x-forwarded-for'];
+    return (fwd ? String(fwd).split(',')[0].trim() : req.socket.remoteAddress) ?? '';
+}
+
+function isLocalIp(ip) {
+    return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+}
+
 function requireApiKey(req, res, next) {
-    const ip = req.ip ?? '';
-    const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
-    if (isLocal) { next(); return; }
+    if (isLocalIp(realIp(req))) { next(); return; }
     const key = req.headers['x-api-key'] ?? '';
     if (key !== API_KEY) {
         res.status(403).json({ error: 'Forbidden' });
@@ -83,8 +91,8 @@ server.on('upgrade', (req, socket, head) => {
         socket.destroy();
         return;
     }
-    const ip = req.socket.remoteAddress ?? '';
-    const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+    const ip = realIp(req);
+    const isLocal = isLocalIp(ip);
 
     if (!isLocal) {
         const key = req.headers['x-api-key'] ?? '';
