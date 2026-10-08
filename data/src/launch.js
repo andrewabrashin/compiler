@@ -97,15 +97,6 @@ server.on('upgrade', (req, socket, head) => {
     const isLocal = isLocalIp(ip);
 
     if (!isLocal) {
-        const key = req.headers['x-api-key'] ?? '';
-        if (key !== API_KEY) {
-            socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
-            socket.destroy();
-            return;
-        }
-    }
-
-    if (!isLocal) {
         if (!wsRateOk(ip)) {
             socket.write('HTTP/1.1 429 Too Many Requests\r\n\r\n');
             socket.destroy();
@@ -130,7 +121,7 @@ server.on('upgrade', (req, socket, head) => {
 });
 
 wss.on('connection', (ws, req) => {
-    const ip = req.socket.remoteAddress ?? '';
+    const ip = realIp(req);
     trackSession(ip, +1);
     ws.once('close', () => trackSession(ip, -1));
 
@@ -145,6 +136,13 @@ wss.on('connection', (ws, req) => {
         if (body.type !== 'start') {
             ws.close(1008, 'Expected {type:"start",...}');
             return;
+        }
+        if (!isLocalIp(ip)) {
+            const key = body.api_key ?? '';
+            if (key !== API_KEY) {
+                ws.close(4003, 'Forbidden');
+                return;
+            }
         }
         await (0, console_1.handleConsoleSession)(ws, body);
         if (ws.readyState === 1) ws.close();
