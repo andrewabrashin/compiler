@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Console Test</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: monospace; background: #1e1e1e; color: #d4d4d4; height: 100vh; display: flex; flex-direction: column; }
+
+    .toolbar {
+      display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+      padding: 10px 12px; background: #252526; border-bottom: 1px solid #3c3c3c;
+    }
+    .toolbar label { font-size: 12px; color: #9d9d9d; }
+    select, input[type=text], input[type=password] {
+      background: #3c3c3c; border: 1px solid #555; color: #d4d4d4;
+      padding: 4px 8px; border-radius: 3px; font-family: monospace; font-size: 13px;
+    }
+    input[type=password] { width: 180px; }
+    button {
+      padding: 5px 14px; border: none; border-radius: 3px; cursor: pointer;
+      font-family: monospace; font-size: 13px; font-weight: bold;
+    }
+    #btn-run   { background: #0e7a0e; color: #fff; }
+    #btn-kill  { background: #a12b2b; color: #fff; display: none; }
+    #btn-clear { background: #3c3c3c; color: #ccc; }
+    #status { font-size: 12px; color: #9d9d9d; margin-left: auto; }
+
+    .main { display: flex; flex: 1; overflow: hidden; }
+
+    .editor-pane {
+      display: flex; flex-direction: column; width: 50%;
+      border-right: 1px solid #3c3c3c;
+    }
+    .editor-pane label { padding: 6px 10px; font-size: 11px; color: #9d9d9d; background: #252526; }
+    #code {
+      flex: 1; resize: none; background: #1e1e1e; color: #d4d4d4;
+      border: none; outline: none; padding: 10px; font-size: 13px; line-height: 1.5;
+      tab-size: 4;
+    }
+
+    .output-pane { display: flex; flex-direction: column; flex: 1; }
+    .output-pane label { padding: 6px 10px; font-size: 11px; color: #9d9d9d; background: #252526; }
+    #output {
+      flex: 1; overflow-y: auto; padding: 10px; font-size: 13px; line-height: 1.6;
+      white-space: pre-wrap; word-break: break-all;
+    }
+
+    .stdin-bar {
+      display: flex; gap: 6px; padding: 8px 10px;
+      background: #252526; border-top: 1px solid #3c3c3c;
+    }
+    #stdin-input {
+      flex: 1; background: #1e1e1e; border: 1px solid #555; color: #d4d4d4;
+      padding: 5px 8px; font-family: monospace; font-size: 13px; border-radius: 3px;
+    }
+    #btn-send { background: #264f78; color: #fff; padding: 5px 12px; border: none; border-radius: 3px; cursor: pointer; font-family: monospace; }
+
+    .out-stdout { color: #d4d4d4; }
+    .out-stderr { color: #f48771; }
+    .out-info   { color: #569cd6; }
+    .out-exit-ok { color: #4ec9b0; }
+    .out-exit-err { color: #f48771; }
+  </style>
+</head>
+<body>
+
+<div class="toolbar">
+  <label>Язык:</label>
+  <select id="lang">
+    <option value="python">Python</option>
+    <option value="js">JavaScript (Node)</option>
+    <option value="ts">TypeScript</option>
+    <option value="cpp">C++</option>
+  </select>
+
+  <label>API Key:</label>
+  <input type="password" id="api-key" placeholder="если требуется">
+
+  <button id="btn-run">▶ Run</button>
+  <button id="btn-kill">■ Kill</button>
+  <button id="btn-clear">Clear</button>
+
+  <span id="status">не подключено</span>
+</div>
+
+<div class="main">
+  <div class="editor-pane">
+    <label>Код</label>
+    <textarea id="code" spellcheck="false">name = input("Введите имя: ")
+print(f"Привет, {name}!")
+
+n = int(input("Введите число: "))
+print(f"Квадрат: {n * n}")
+</textarea>
+  </div>
+
+  <div class="output-pane">
+    <label>Вывод</label>
+    <div id="output"></div>
+    <div class="stdin-bar">
+      <input type="text" id="stdin-input" placeholder="stdin → Enter для отправки" disabled>
+      <button id="btn-send" disabled>Send</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const WS_URL = 'wss://compiler-1-qgn4.onrender.com/console';
+
+  const langSelect   = document.getElementById('lang');
+  const apiKeyInput  = document.getElementById('api-key');
+  const codeArea     = document.getElementById('code');
+  const output       = document.getElementById('output');
+  const stdinInput   = document.getElementById('stdin-input');
+  const btnRun       = document.getElementById('btn-run');
+  const btnKill      = document.getElementById('btn-kill');
+  const btnClear     = document.getElementById('btn-clear');
+  const btnSend      = document.getElementById('btn-send');
+  const statusEl     = document.getElementById('status');
+
+  const EXAMPLES = {
+    python: `name = input("Введите имя: ")\nprint(f"Привет, {name}!")\n\nn = int(input("Введите число: "))\nprint(f"Квадрат: {n * n}")`,
+    js:     `const readline = require('readline');\nconst rl = readline.createInterface({ input: process.stdin });\nrl.question('Введите имя: ', name => {\n  console.log(\`Привет, \${name}!\`);\n  rl.close();\n});`,
+    ts:     `import * as readline from 'readline';\nconst rl = readline.createInterface({ input: process.stdin });\nrl.question('Введите имя: ', (name: string) => {\n  console.log(\`Привет, \${name}!\`);\n  rl.close();\n});`,
+    cpp:    `#include <iostream>\n#include <string>\nint main() {\n    std::string name;\n    std::cout << "Введите имя: ";\n    std::getline(std::cin, name);\n    std::cout << "Привет, " << name << "!" << std::endl;\n    return 0;\n}`,
+  };
+
+  const FILE_NAMES = { python: 'main.py', js: 'main.js', ts: 'main.ts', cpp: 'main.cpp' };
+
+  langSelect.addEventListener('change', () => {
+    codeArea.value = EXAMPLES[langSelect.value];
+  });
+
+  let ws = null;
+  let startTime = null;
+
+  function log(text, cls) {
+    const span = document.createElement('span');
+    span.className = cls;
+    span.textContent = text;
+    output.appendChild(span);
+    output.scrollTop = output.scrollHeight;
+  }
+
+  function setRunning(running) {
+    btnRun.style.display  = running ? 'none' : '';
+    btnKill.style.display = running ? '' : 'none';
+    stdinInput.disabled = !running;
+    btnSend.disabled    = !running;
+    if (!running) stdinInput.value = '';
+  }
+
+  function sendStdin() {
+    const text = stdinInput.value;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: 'stdin', data: text + '\n' }));
+    log(text + '\n', 'out-info');
+    stdinInput.value = '';
+  }
+
+  stdinInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') sendStdin();
+  });
+  btnSend.addEventListener('click', sendStdin);
+
+  codeArea.addEventListener('keydown', e => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const s = codeArea.selectionStart;
+      codeArea.value = codeArea.value.slice(0, s) + '    ' + codeArea.value.slice(codeArea.selectionEnd);
+      codeArea.selectionStart = codeArea.selectionEnd = s + 4;
+    }
+  });
+
+  btnClear.addEventListener('click', () => { output.innerHTML = ''; });
+
+  btnKill.addEventListener('click', () => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'kill' }));
+    }
+  });
+
+  btnRun.addEventListener('click', () => {
+    if (ws) { ws.close(); ws = null; }
+
+    const lang = langSelect.value;
+    const apiKey = apiKeyInput.value.trim();
+
+    log(`▶ Подключение...\n`, 'out-info');
+    statusEl.textContent = 'подключение...';
+
+    try {
+      ws = new WebSocket(WS_URL);
+    } catch (e) {
+      log(`Ошибка: ${e.message}\n`, 'out-stderr');
+      return;
+    }
+
+    ws.onopen = () => {
+      startTime = Date.now();
+      statusEl.textContent = 'выполняется';
+      setRunning(true);
+
+      const msg = {
+        type: 'start',
+        compiler: lang,
+        files: [{ name: FILE_NAMES[lang], content: codeArea.value }],
+      };
+      if (apiKey) msg.api_key = apiKey;
+
+      ws.send(JSON.stringify(msg));
+      log(`▶ Запуск (${lang})\n`, 'out-info');
+    };
+
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      if (msg.type === 'stdout') {
+        log(msg.data, 'out-stdout');
+      } else if (msg.type === 'stderr') {
+        log(msg.data, 'out-stderr');
+      } else if (msg.type === 'exit') {
+        const dur = msg.duration ?? (Date.now() - startTime);
+        if (msg.code === 0) {
+          log(`\n✓ Завершено: код 0, время ${dur} мс\n`, 'out-exit-ok');
+        } else {
+          log(`\n✗ Завершено: код ${msg.code}, время ${dur} мс\n`, 'out-exit-err');
+        }
+        setRunning(false);
+        statusEl.textContent = `завершено (${msg.code})`;
+        ws.close();
+      } else if (msg.type === 'error') {
+        log(`Ошибка: ${msg.message}\n`, 'out-stderr');
+        setRunning(false);
+        statusEl.textContent = 'ошибка';
+      }
+    };
+
+    ws.onerror = () => {
+      log('WebSocket ошибка соединения\n', 'out-stderr');
+      setRunning(false);
+      statusEl.textContent = 'ошибка';
+    };
+
+    ws.onclose = (e) => {
+      if (e.code !== 1000 && e.code !== 1005) {
+        log(`Соединение закрыто (${e.code})\n`, 'out-stderr');
+      }
+      setRunning(false);
+      statusEl.textContent = 'не подключено';
+      ws = null;
+    };
+  });
+</script>
+</body>
+</html>
