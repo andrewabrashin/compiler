@@ -5,13 +5,19 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const express_rate_limit_1 = require("express-rate-limit");
+const http_1 = __importDefault(require("http"));
+const ws_1 = require("ws");
 const execute_1 = require("./execute");
+const console_1 = require("./console");
+
 const app = (0, express_1.default)();
 const PORT = parseInt(process.env.PORT ?? '3999', 10);
 const RESTART_TOKEN = process.env.RESTART_TOKEN ?? '';
 const API_KEY = process.env.API_KEY ?? '';
 const ADMIN_KEY = process.env.ADMIN_KEY ?? '';
+
 app.use(express_1.default.json({ limit: '10mb' }));
+
 function requireApiKey(req, res, next) {
     const ip = req.ip ?? '';
     const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
@@ -25,6 +31,7 @@ function requireApiKey(req, res, next) {
     }
     next();
 }
+
 const limiter = (0, express_rate_limit_1.rateLimit)({
     windowMs: 60_000,
     max: 30,
@@ -33,6 +40,7 @@ const limiter = (0, express_rate_limit_1.rateLimit)({
     skip: (req) => ADMIN_KEY !== '' && req.headers['x-admin-key'] === ADMIN_KEY,
     handler: (_req, res) => res.status(429).json({ error: 'Too Many Requests' }),
 });
+
 app.get('/healthz', (_req, res) => res.json({ ok: true }));
 app.post('/execute', requireApiKey, limiter, execute_1.executeHandler);
 app.post('/restart', (req, res) => {
@@ -46,6 +54,49 @@ app.post('/restart', (req, res) => {
     res.json({ ok: true });
     process.exit(1);
 });
-app.listen(PORT, '0.0.0.0', () => {
+
+const server = http_1.default.createServer(app);
+const wss = new ws_1.WebSocketServer({ noServer: true });
+
+server.on('upgrade', (req, socket, head) => {
+    const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
+    if (url.pathname !== '/console') {
+        socket.destroy();
+        return;
+    }
+    const ip = req.socket.remoteAddress ?? '';
+    const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+    if (!isLocal && API_KEY) {
+        const key = req.headers['x-api-key'] ?? '';
+        if (key !== API_KEY) {
+            socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+            socket.destroy();
+            return;
+        }
+    }
+    wss.handleUpgrade(req, socket, head, (ws) => {
+        wss.emit('connection', ws, req);
+    });
+});
+
+wss.on('connection', (ws) => {
+    ws.once('message', async (raw) => {
+        let body;
+        try {
+            body = JSON.parse(raw.toString());
+        } catch {
+            ws.close(1008, 'Invalid JSON');
+            return;
+        }
+        if (body.type !== 'start') {
+            ws.close(1008, 'Expected {type:"start",...}');
+            return;
+        }
+        await (0, console_1.handleConsoleSession)(ws, body);
+        if (ws.readyState === 1) ws.close();
+    });
+});
+
+server.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
 });
