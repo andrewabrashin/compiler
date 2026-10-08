@@ -22,12 +22,10 @@ function requireApiKey(req, res, next) {
     const ip = req.ip ?? '';
     const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
     if (isLocal) { next(); return; }
-    if (API_KEY) {
-        const key = req.headers['x-api-key'] ?? '';
-        if (key !== API_KEY) {
-            res.status(403).json({ error: 'Forbidden' });
-            return;
-        }
+    const key = req.headers['x-api-key'] ?? '';
+    if (key !== API_KEY) {
+        res.status(403).json({ error: 'Forbidden' });
+        return;
     }
     next();
 }
@@ -88,7 +86,7 @@ server.on('upgrade', (req, socket, head) => {
     const ip = req.socket.remoteAddress ?? '';
     const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
 
-    if (!isLocal && API_KEY) {
+    if (!isLocal) {
         const key = req.headers['x-api-key'] ?? '';
         if (key !== API_KEY) {
             socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
