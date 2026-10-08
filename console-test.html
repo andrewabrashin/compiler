@@ -191,7 +191,9 @@
   function sendStdin() {
     const text = stdinInput.value;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    ws.send(JSON.stringify({ type: 'stdin', data: text + '\n' }));
+    // Multi-line blocks need a trailing empty line to close the compound statement
+    const data = text.includes('\n') ? text + '\n\n' : text + '\n';
+    ws.send(JSON.stringify({ type: 'stdin', data }));
     log(text + '\n', 'out-info');
     stdinInput.value = '';
     stdinInput.style.height = 'auto';
