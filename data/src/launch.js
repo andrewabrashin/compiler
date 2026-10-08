@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const express_rate_limit_1 = require("express-rate-limit");
 const http_1 = __importDefault(require("http"));
+const path_1 = __importDefault(require("path"));
 const ws_1 = require("ws");
 const execute_1 = require("./execute");
 const console_1 = require("./console");
@@ -48,6 +49,7 @@ const limiter = (0, express_rate_limit_1.rateLimit)({
 });
 
 app.get('/healthz', (_req, res) => res.json({ ok: true }));
+app.get('/console-test', (_req, res) => res.sendFile(path_1.default.join(__dirname, 'console-test.html')));
 app.post('/execute', requireApiKey, limiter, execute_1.executeHandler);
 app.post('/restart', (req, res) => {
     if (RESTART_TOKEN) {
