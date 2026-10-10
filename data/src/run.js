@@ -141,7 +141,7 @@ async function processRun(body, ip = '') {
             `export TF_NUM_INTRAOP_THREADS=1`,
             `export MPLCONFIGDIR=${localTmp}`,
         ].join(' && ');
-        const vmLimit = (compiler === 'js' || compiler === 'ts') ? 2097152 : 524288;
+        const vmLimit = (compiler === 'js' || compiler === 'ts') ? 2097152 : 262144;
         const innerCmd = `ulimit -f 10240 && ulimit -u 64 && ulimit -v ${vmLimit} && ${envVars} && cd ${tempDir} && ${command}`;
         const fullCommand = [
             `mkdir -p ${localTmp}`,
