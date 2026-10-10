@@ -1,15 +1,14 @@
 FROM python:3.12
 
-# Установим библиотеки для языков
-# Go C++ Node.js
-RUN apt update
-RUN apt install -y -q --no-install-recommends \
-    golang \
-    gcc gcc-multilib g++ \
-    curl ca-certificates
-# Node.js 22 LTS (через NodeSource — apt даёт устаревший Node.js 18 EOL)
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
-    apt install -y nodejs
-RUN rm -rf /var/lib/apt/lists/*
+# System deps: Go, C++, curl
+RUN apt-get update && apt-get install -y -q --no-install-recommends \
+    golang gcc gcc-multilib g++ curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
+# Node.js 22 LTS via NodeSource
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Global npm tools
 RUN npm i -g yarn typescript ts-node @types/node

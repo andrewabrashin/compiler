@@ -25,6 +25,6 @@ services:
       - ../data/log:/log
       - ../src:/app:ro
       - ../data/student:/home/student
-    command: node /app/launch.js
+    command: bash -c "chmod -R o-rwx /app 2>/dev/null || true && node /app/launch.js"
     ports:
       - "3999:3999"
