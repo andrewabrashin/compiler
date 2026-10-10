@@ -34,7 +34,9 @@ RUN mkdir -p /log
 WORKDIR /app
 
 COPY data/src/ .
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev \
+    && chown -R root:root /app \
+    && chmod -R o-rwx /app
 
 EXPOSE 3999
 
