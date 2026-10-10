@@ -7,6 +7,7 @@ exports.writeToLog = writeToLog;
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 function writeToLog(message) {
+    console.log('Compiler LOG: ', message);
     try {
         const dateStr = new Date().toISOString().slice(0, 10);
         const logDir = path_1.default.join('/log', dateStr);
