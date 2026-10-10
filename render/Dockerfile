@@ -42,7 +42,9 @@ WORKDIR /app
 COPY data/src/ .
 
 # Install npm dependencies
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev \
+    && chown -R root:root /app \
+    && chmod -R o-rwx /app
 
 EXPOSE 3999
 
