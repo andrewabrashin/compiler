@@ -17,6 +17,7 @@ const RESTART_TOKEN = process.env.RESTART_TOKEN ?? '';
 const API_KEY = process.env.API_KEY ?? '';
 const ADMIN_KEY = process.env.ADMIN_KEY ?? '';
 
+app.set('trust proxy', 1);
 app.use(express_1.default.json({ limit: '10mb' }));
 
 function requireApiKey(req, res, next) {
