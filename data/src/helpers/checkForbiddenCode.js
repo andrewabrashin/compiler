@@ -7,6 +7,10 @@ const FORBIDDEN_PHRASES = {
         /from\s+(subprocess|pty)\s+import/i,
         /eval\s*\(/i,
         /exec\s*\(/i,
+        /os\s*\.\s*(popen|system|exec[vple]|spawn)/i,
+        /__import__\s*\(/i,
+        /importlib/i,
+        /ctypes/i,
     ],
     js: [
         /require\s*\(/i,
