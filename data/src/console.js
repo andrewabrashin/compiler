@@ -8,6 +8,7 @@ const path = require("path");
 const { checkForbiddenCode } = require("./helpers/checkForbiddenCode");
 const { killProcess } = require("./helpers/killProcess");
 const { sanitizeStderr } = require("./helpers/errorLocalizer");
+const { writeToLog } = require("./helpers/writeToLog");
 
 const TIMEOUT_SEC = parseInt(process.env.TIMEOUT ?? '60', 10);
 const INTERACTIVE_TIMEOUT_SEC = parseInt(process.env.INTERACTIVE_TIMEOUT ?? '600', 10);
@@ -109,6 +110,8 @@ async function handleConsoleSession(ws, body) {
         return;
     }
 
+    writeToLog(`# CONSOLE START\ntime: ${new Date().toISOString()}\nip: ${body._ip ?? ''}\ncompiler: ${compiler}\ncommand: ${command}\ninteractive: ${interactive}\nfiles: ${(body.files ?? []).map(f => f.name).join(', ')}\n`);
+
     if (!fs.existsSync(TESTS_PATH)) fs.mkdirSync(TESTS_PATH, { recursive: true });
     const tempDir = fs.mkdtempSync(path.join(TESTS_PATH, 'temp-'));
     const startTime = Date.now();
@@ -169,7 +172,9 @@ async function handleConsoleSession(ws, body) {
 
             child.on('close', code => {
                 clearTimeout(timeoutId);
-                send(ws, { type: 'exit', code: code ?? 1, duration: Date.now() - startTime });
+                const duration = Date.now() - startTime;
+                writeToLog(`# CONSOLE END\ntime: ${new Date().toISOString()}\nip: ${body._ip ?? ''}\ncompiler: ${compiler}\nexit_code: ${code ?? 1}\nduration: ${duration}\n# END\n\n`);
+                send(ws, { type: 'exit', code: code ?? 1, duration });
                 finish();
             });
 

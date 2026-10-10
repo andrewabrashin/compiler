@@ -147,6 +147,7 @@ wss.on('connection', (ws, req) => {
             ws.close(1008, 'Expected {type:"start",...}');
             return;
         }
+        body._ip = ip;
         try {
             await (0, console_1.handleConsoleSession)(ws, body);
         } catch (err) {
