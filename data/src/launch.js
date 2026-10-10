@@ -131,10 +131,11 @@ wss.on('connection', (ws, req) => {
     trackSession(ip, +1);
     ws.once('close', () => trackSession(ip, -1));
 
+    console.log(`[WS] connect ip=${ip}`);
     const pingTimer = setInterval(() => {
         if (ws.readyState === ws_1.WebSocket.OPEN) ws.ping();
     }, WS_PING_INTERVAL_MS);
-    ws.once('close', () => clearInterval(pingTimer));
+    ws.once('close', () => { clearInterval(pingTimer); console.log(`[WS] disconnect ip=${ip}`); });
 
     ws.once('message', async (raw) => {
         let body;

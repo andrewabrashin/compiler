@@ -110,7 +110,9 @@ async function handleConsoleSession(ws, body) {
         return;
     }
 
-    writeToLog(`# CONSOLE START\ntime: ${new Date().toISOString()}\nip: ${body._ip ?? ''}\ncompiler: ${compiler}\ncommand: ${command}\ninteractive: ${interactive}\nfiles: ${(body.files ?? []).map(f => f.name).join(', ')}\n`);
+    const ip = body._ip ?? '';
+    console.log(`[WS] start ip=${ip} compiler=${compiler} interactive=${interactive} files=${(body.files ?? []).map(f => f.name).join(',')}`);
+    writeToLog(`# CONSOLE START\ntime: ${new Date().toISOString()}\nip: ${ip}\ncompiler: ${compiler}\ncommand: ${command}\ninteractive: ${interactive}\nfiles: ${(body.files ?? []).map(f => f.name).join(', ')}\n`);
 
     if (!fs.existsSync(TESTS_PATH)) fs.mkdirSync(TESTS_PATH, { recursive: true });
     const tempDir = fs.mkdtempSync(path.join(TESTS_PATH, 'temp-'));
@@ -173,7 +175,8 @@ async function handleConsoleSession(ws, body) {
             child.on('close', code => {
                 clearTimeout(timeoutId);
                 const duration = Date.now() - startTime;
-                writeToLog(`# CONSOLE END\ntime: ${new Date().toISOString()}\nip: ${body._ip ?? ''}\ncompiler: ${compiler}\nexit_code: ${code ?? 1}\nduration: ${duration}\n# END\n\n`);
+                console.log(`[WS] end ip=${ip} compiler=${compiler} exit=${code ?? 1} duration=${duration}ms`);
+                writeToLog(`# CONSOLE END\ntime: ${new Date().toISOString()}\nip: ${ip}\ncompiler: ${compiler}\nexit_code: ${code ?? 1}\nduration: ${duration}\n# END\n\n`);
                 send(ws, { type: 'exit', code: code ?? 1, duration });
                 finish();
             });
