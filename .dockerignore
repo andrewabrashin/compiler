@@ -4,6 +4,6 @@ render
 node_modules
 data/log
 data/student
-data/src/node_modules
+src/node_modules
 *.md
 *.ts

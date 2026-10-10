@@ -22,9 +22,9 @@ services:
       - LLM_API_KEY=${LLM_API_KEY:-}
       - LLM_MODEL=${LLM_MODEL:-}
     volumes:
-      - ./data/log:/log
-      - ./data/src:/app:ro
-      - ./data/student:/home/student
+      - ../data/log:/log
+      - ../src:/app:ro
+      - ../data/student:/home/student
     command: node /app/launch.js
     ports:
       - "3999:3999"

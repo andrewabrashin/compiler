@@ -39,7 +39,7 @@ RUN mkdir -p /log
 WORKDIR /app
 
 # Copy server source into image (no volume mount on render.com)
-COPY data/src/ .
+COPY src/ .
 
 # Install npm dependencies
 RUN npm ci --omit=dev \

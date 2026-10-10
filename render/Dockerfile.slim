@@ -33,7 +33,7 @@ RUN mkdir -p /log
 
 WORKDIR /app
 
-COPY data/src/ .
+COPY src/ .
 RUN npm ci --omit=dev \
     && chown -R root:root /app \
     && chmod -R o-rwx /app
