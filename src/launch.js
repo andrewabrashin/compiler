@@ -3,8 +3,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+const crypto_1 = __importDefault(require("crypto"));
 const express_1 = __importDefault(require("express"));
-const express_rate_limit_1 = require("express-rate-limit");
 const http_1 = __importDefault(require("http"));
 const path_1 = __importDefault(require("path"));
 const ws_1 = require("ws");
@@ -13,71 +13,59 @@ const console_1 = require("./console");
 
 const app = (0, express_1.default)();
 const PORT = parseInt(process.env.PORT ?? '3999', 10);
-const RESTART_TOKEN = process.env.RESTART_TOKEN ?? '';
-const API_KEY = process.env.API_KEY ?? '';
-const ADMIN_KEY = process.env.ADMIN_KEY ?? '';
+const COMPILER_SECRET = process.env.COMPILER_SECRET ?? '';
 
 app.set('trust proxy', 1);
 app.use(express_1.default.json({ limit: '10mb' }));
 
-function requireApiKey(req, res, next) {
+// Token format: <md5(SECRET + "." + expired_ms)>.<expired_ms>
+function validateToken(token) {
+    if (!COMPILER_SECRET) return { ok: false, status: 500, error: 'Server configuration error' };
+    if (!token) return { ok: false, status: 401, error: 'Authorization token not provided' };
+
+    const parts = token.split('.');
+    if (parts.length !== 2 || !parts[0] || !parts[1])
+        return { ok: false, status: 401, error: 'Invalid token format' };
+
+    const [tokenHash, expiredRaw] = parts;
+    const expired = parseInt(expiredRaw, 10);
+    if (isNaN(expired)) return { ok: false, status: 401, error: 'Invalid expiration time format' };
+    if (Date.now() > expired) return { ok: false, status: 401, error: 'Token has expired' };
+
+    const expectedHash = crypto_1.default.createHash('md5').update(`${COMPILER_SECRET}.${expired}`).digest('hex');
+    const a = Buffer.from(tokenHash);
+    const b = Buffer.from(expectedHash);
+    if (a.length !== b.length || !crypto_1.default.timingSafeEqual(a, b))
+        return { ok: false, status: 401, error: 'Invalid token signature' };
+
+    return { ok: true };
+}
+
+function requireToken(req, res, next) {
     const ip = req.ip ?? '';
     const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
     if (isLocal) { next(); return; }
-    if (API_KEY) {
-        const key = req.headers['x-api-key'] ?? '';
-        if (key !== API_KEY) {
-            res.status(403).json({ error: 'Forbidden' });
-            return;
-        }
+
+    const auth = req.headers['authorization'] ?? '';
+    const token = auth.replace(/^\w+\s+/, '').trim();
+    const result = validateToken(token);
+    if (!result.ok) {
+        res.status(result.status).json({ error: result.error });
+        return;
     }
     next();
 }
 
-const limiter = (0, express_rate_limit_1.rateLimit)({
-    windowMs: 60_000,
-    max: 30,
-    standardHeaders: true,
-    legacyHeaders: false,
-    skip: (req) => ADMIN_KEY !== '' && req.headers['x-admin-key'] === ADMIN_KEY,
-    handler: (_req, res) => res.status(429).json({ error: 'Too Many Requests' }),
-});
-
 app.get('/healthz', (_req, res) => res.json({ ok: true }));
 app.get('/console-test', (_req, res) => res.sendFile(path_1.default.join(__dirname, 'console-test.html')));
-app.post('/execute', requireApiKey, limiter, execute_1.executeHandler);
-app.post('/restart', (req, res) => {
-    if (RESTART_TOKEN) {
-        const token = req.headers['x-restart-token'] ?? '';
-        if (token !== RESTART_TOKEN) {
-            res.status(403).json({ ok: false });
-            return;
-        }
-    }
+app.post('/execute', requireToken, execute_1.executeHandler);
+app.post('/restart', requireToken, (_req, res) => {
     res.json({ ok: true });
     process.exit(1);
 });
 
-const MAX_SESSIONS        = parseInt(process.env.MAX_SESSIONS         ?? '20', 10);
-const MAX_SESSIONS_PER_IP = parseInt(process.env.MAX_SESSIONS_PER_IP  ?? '3',  10);
-const WS_RATE_MAX         = parseInt(process.env.WS_RATE_MAX          ?? '10', 10);
-
+const MAX_SESSIONS = parseInt(process.env.MAX_SESSIONS ?? '20', 10);
 let activeSessions = 0;
-const sessionsByIp = new Map();
-const wsRateMap    = new Map();
-
-function wsRateOk(ip) {
-    const now = Date.now();
-    let e = wsRateMap.get(ip);
-    if (!e || now > e.resetAt) { e = { count: 0, resetAt: now + 60_000 }; wsRateMap.set(ip, e); }
-    return ++e.count <= WS_RATE_MAX;
-}
-
-function trackSession(ip, delta) {
-    activeSessions += delta;
-    const n = (sessionsByIp.get(ip) ?? 0) + delta;
-    if (n <= 0) sessionsByIp.delete(ip); else sessionsByIp.set(ip, n);
-}
 
 const server = http_1.default.createServer(app);
 const wss = new ws_1.WebSocketServer({ noServer: true });
@@ -88,26 +76,15 @@ server.on('upgrade', (req, socket, head) => {
         socket.destroy();
         return;
     }
+
     const ip = req.socket.remoteAddress ?? '';
     const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
 
-    if (!isLocal && API_KEY) {
-        const key = req.headers['x-api-key'] ?? '';
-        if (key !== API_KEY) {
-            socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
-            socket.destroy();
-            return;
-        }
-    }
-
     if (!isLocal) {
-        if (!wsRateOk(ip)) {
-            socket.write('HTTP/1.1 429 Too Many Requests\r\n\r\n');
-            socket.destroy();
-            return;
-        }
-        if ((sessionsByIp.get(ip) ?? 0) >= MAX_SESSIONS_PER_IP) {
-            socket.write('HTTP/1.1 429 Too Many Requests\r\n\r\n');
+        const token = url.searchParams.get('token') ?? '';
+        const result = validateToken(token);
+        if (!result.ok) {
+            socket.write(`HTTP/1.1 ${result.status} Unauthorized\r\n\r\n`);
             socket.destroy();
             return;
         }
@@ -128,10 +105,10 @@ const WS_PING_INTERVAL_MS = 30_000;
 
 wss.on('connection', (ws, req) => {
     const ip = req.socket.remoteAddress ?? '';
-    trackSession(ip, +1);
-    ws.once('close', () => trackSession(ip, -1));
+    activeSessions++;
+    ws.once('close', () => activeSessions--);
 
-    console.log(`[WS] connect ip=${ip}`);
+    console.log(`[WS] connect ip=${ip} active=${activeSessions}`);
     const pingTimer = setInterval(() => {
         if (ws.readyState === ws_1.WebSocket.OPEN) ws.ping();
     }, WS_PING_INTERVAL_MS);

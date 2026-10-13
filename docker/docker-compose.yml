@@ -14,13 +14,11 @@ services:
       - TZ=Europe/Moscow
       - PORT=3999
       - TIMEOUT=${TIMEOUT:-60}
-      - NODE_ENV=production
-      - API_KEY=${API_KEY:-}
-      - ADMIN_KEY=${ADMIN_KEY:-}
-      - RESTART_TOKEN=${RESTART_TOKEN:-}
-      - LLM_API_URL=${LLM_API_URL:-}
-      - LLM_API_KEY=${LLM_API_KEY:-}
-      - LLM_MODEL=${LLM_MODEL:-}
+      - MAX_MEMORY_MB=512
+      - NODE_ENV=development
+      - COMPILER_SECRET=${COMPILER_SECRET:-}
+    env_file:
+      - .env
     volumes:
       - ../data/log:/log
       - ../src:/app:ro
