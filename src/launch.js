@@ -42,10 +42,6 @@ function validateToken(token) {
 }
 
 function requireToken(req, res, next) {
-    const ip = req.ip ?? '';
-    const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
-    if (isLocal) { next(); return; }
-
     const auth = req.headers['authorization'] ?? '';
     const token = auth.replace(/^\w+\s+/, '').trim();
     const result = validateToken(token);
@@ -78,16 +74,13 @@ server.on('upgrade', (req, socket, head) => {
     }
 
     const ip = req.socket.remoteAddress ?? '';
-    const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
 
-    if (!isLocal) {
-        const token = url.searchParams.get('token') ?? '';
-        const result = validateToken(token);
-        if (!result.ok) {
-            socket.write(`HTTP/1.1 ${result.status} Unauthorized\r\n\r\n`);
-            socket.destroy();
-            return;
-        }
+    const token = url.searchParams.get('token') ?? '';
+    const result = validateToken(token);
+    if (!result.ok) {
+        socket.write(`HTTP/1.1 ${result.status} Unauthorized\r\n\r\n`);
+        socket.destroy();
+        return;
     }
 
     if (activeSessions >= MAX_SESSIONS) {
