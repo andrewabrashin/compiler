@@ -37,7 +37,7 @@ function validateToken(token) {
     const [tokenHash, expiredRaw] = parts;
     const expired = parseInt(expiredRaw, 10);
     if (isNaN(expired)) return { ok: false, status: 401, error: 'Invalid expiration time format' };
-    if (Date.now() > expired) return { ok: false, status: 401, error: 'Token has expired' };
+    if (Date.now() > expired + 60_000) return { ok: false, status: 401, error: 'Token has expired' };
 
     const expectedHash = crypto_1.default.createHash('md5').update(`${COMPILER_SECRET}.${expired}`).digest('hex');
     const a = Buffer.from(tokenHash);
