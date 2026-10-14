@@ -44,7 +44,9 @@ COPY src/ .
 # Install npm dependencies
 RUN npm ci --omit=dev \
     && chown -R root:root /app \
-    && chmod -R o-rwx /app
+    && chmod -R o-rwx /app \
+    && chmod o+x /app /app/helpers \
+    && chmod o+r /app/helpers/unitTestRunner.js /app/helpers/codeTester.js
 
 EXPOSE 3999
 
