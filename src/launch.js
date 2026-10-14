@@ -16,6 +16,13 @@ const PORT = parseInt(process.env.PORT ?? '3999', 10);
 const COMPILER_SECRET = process.env.COMPILER_SECRET ?? '';
 
 app.set('trust proxy', 1);
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if (req.method === 'OPTIONS') { res.sendStatus(204); return; }
+    next();
+});
 app.use(express_1.default.json({ limit: '10mb' }));
 
 // Token format: <md5(SECRET + "." + expired_ms)>.<expired_ms>
